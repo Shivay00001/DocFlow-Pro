@@ -1,0 +1,384 @@
+{
+  "workflows": {
+    "gst_invoice_approval": {
+      "name": "GST Invoice Approval",
+      "description": "Standard workflow for GST invoice approval",
+      "workflow_type": "invoice_approval",
+      "version": "1.0",
+      "nodes": [
+        {
+          "node_id": "start",
+          "node_type": "start",
+          "config": {},
+          "next_nodes": [
+            {"node_id": "validate", "condition": null}
+          ]
+        },
+        {
+          "node_id": "validate",
+          "node_type": "condition",
+          "config": {
+            "validation_rules": [
+              "gst_number_valid",
+              "amount_positive",
+              "date_valid"
+            ]
+          },
+          "next_nodes": [
+            {"node_id": "manager_approval", "condition": "validation_passed"},
+            {"node_id": "notify_error", "condition": "validation_failed"}
+          ]
+        },
+        {
+          "node_id": "manager_approval",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "manager",
+            "timeout_days": 3,
+            "escalation_after": 2
+          },
+          "next_nodes": [
+            {"node_id": "finance_approval", "condition": "approved"},
+            {"node_id": "notify_rejection", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "finance_approval",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "finance",
+            "timeout_days": 2,
+            "auto_approve_threshold": 10000
+          },
+          "next_nodes": [
+            {"node_id": "process_payment", "condition": "approved"},
+            {"node_id": "notify_rejection", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "process_payment",
+          "node_type": "assign",
+          "config": {
+            "assignee_role": "accounts",
+            "task": "Process payment and update records"
+          },
+          "next_nodes": [
+            {"node_id": "notify_completion", "condition": null}
+          ]
+        },
+        {
+          "node_id": "notify_completion",
+          "node_type": "notify",
+          "config": {
+            "recipients": ["initiator", "manager", "finance"],
+            "message": "Invoice processed successfully",
+            "notification_type": "email"
+          },
+          "next_nodes": [
+            {"node_id": "end", "condition": null}
+          ]
+        },
+        {
+          "node_id": "notify_rejection",
+          "node_type": "notify",
+          "config": {
+            "recipients": ["initiator"],
+            "message": "Invoice rejected - please review and resubmit",
+            "notification_type": "email"
+          },
+          "next_nodes": [
+            {"node_id": "end", "condition": null}
+          ]
+        },
+        {
+          "node_id": "notify_error",
+          "node_type": "notify",
+          "config": {
+            "recipients": ["initiator"],
+            "message": "Validation failed - please correct errors",
+            "notification_type": "email"
+          },
+          "next_nodes": [
+            {"node_id": "end", "condition": null}
+          ]
+        },
+        {
+          "node_id": "end",
+          "node_type": "end",
+          "config": {},
+          "next_nodes": []
+        }
+      ]
+    },
+    
+    "purchase_approval": {
+      "name": "Purchase Order Approval",
+      "description": "Multi-level approval for purchase orders",
+      "workflow_type": "purchase_approval",
+      "version": "1.0",
+      "nodes": [
+        {
+          "node_id": "start",
+          "node_type": "start",
+          "config": {},
+          "next_nodes": [
+            {"node_id": "check_amount", "condition": null}
+          ]
+        },
+        {
+          "node_id": "check_amount",
+          "node_type": "condition",
+          "config": {
+            "conditions": [
+              {"field": "amount", "operator": "less_than", "value": 50000, "next": "team_lead"},
+              {"field": "amount", "operator": "less_than", "value": 200000, "next": "manager"},
+              {"field": "amount", "operator": "greater_equal", "value": 200000, "next": "director"}
+            ]
+          },
+          "next_nodes": [
+            {"node_id": "team_lead", "condition": "amount < 50000"},
+            {"node_id": "manager", "condition": "amount < 200000"},
+            {"node_id": "director", "condition": "amount >= 200000"}
+          ]
+        },
+        {
+          "node_id": "team_lead",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "team_lead",
+            "timeout_days": 1
+          },
+          "next_nodes": [
+            {"node_id": "create_po", "condition": "approved"},
+            {"node_id": "end", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "manager",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "manager",
+            "timeout_days": 2
+          },
+          "next_nodes": [
+            {"node_id": "create_po", "condition": "approved"},
+            {"node_id": "end", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "director",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "director",
+            "timeout_days": 3
+          },
+          "next_nodes": [
+            {"node_id": "cfo_approval", "condition": "approved"},
+            {"node_id": "end", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "cfo_approval",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "cfo",
+            "timeout_days": 2
+          },
+          "next_nodes": [
+            {"node_id": "create_po", "condition": "approved"},
+            {"node_id": "end", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "create_po",
+          "node_type": "assign",
+          "config": {
+            "assignee_role": "procurement",
+            "task": "Create purchase order and send to vendor"
+          },
+          "next_nodes": [
+            {"node_id": "end", "condition": null}
+          ]
+        },
+        {
+          "node_id": "end",
+          "node_type": "end",
+          "config": {},
+          "next_nodes": []
+        }
+      ]
+    },
+    
+    "expense_claim": {
+      "name": "Employee Expense Claim",
+      "description": "Workflow for employee expense reimbursement",
+      "workflow_type": "expense_claim",
+      "version": "1.0",
+      "nodes": [
+        {
+          "node_id": "start",
+          "node_type": "start",
+          "config": {},
+          "next_nodes": [
+            {"node_id": "validate_receipts", "condition": null}
+          ]
+        },
+        {
+          "node_id": "validate_receipts",
+          "node_type": "condition",
+          "config": {
+            "check_receipts": true,
+            "check_policy_compliance": true
+          },
+          "next_nodes": [
+            {"node_id": "manager_approval", "condition": "valid"},
+            {"node_id": "notify_invalid", "condition": "invalid"}
+          ]
+        },
+        {
+          "node_id": "manager_approval",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "reporting_manager",
+            "timeout_days": 2
+          },
+          "next_nodes": [
+            {"node_id": "finance_review", "condition": "approved"},
+            {"node_id": "end", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "finance_review",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "finance",
+            "timeout_days": 3,
+            "auto_approve_threshold": 5000
+          },
+          "next_nodes": [
+            {"node_id": "process_reimbursement", "condition": "approved"},
+            {"node_id": "end", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "process_reimbursement",
+          "node_type": "assign",
+          "config": {
+            "assignee_role": "payroll",
+            "task": "Process reimbursement payment"
+          },
+          "next_nodes": [
+            {"node_id": "notify_payment", "condition": null}
+          ]
+        },
+        {
+          "node_id": "notify_payment",
+          "node_type": "notify",
+          "config": {
+            "recipients": ["employee"],
+            "message": "Reimbursement processed - payment in next payroll cycle"
+          },
+          "next_nodes": [
+            {"node_id": "end", "condition": null}
+          ]
+        },
+        {
+          "node_id": "notify_invalid",
+          "node_type": "notify",
+          "config": {
+            "recipients": ["employee"],
+            "message": "Please attach valid receipts and resubmit"
+          },
+          "next_nodes": [
+            {"node_id": "end", "condition": null}
+          ]
+        },
+        {
+          "node_id": "end",
+          "node_type": "end",
+          "config": {},
+          "next_nodes": []
+        }
+      ]
+    },
+    
+    "leave_request": {
+      "name": "Leave Request Approval",
+      "description": "Employee leave request workflow",
+      "workflow_type": "leave_request",
+      "version": "1.0",
+      "nodes": [
+        {
+          "node_id": "start",
+          "node_type": "start",
+          "config": {},
+          "next_nodes": [
+            {"node_id": "check_balance", "condition": null}
+          ]
+        },
+        {
+          "node_id": "check_balance",
+          "node_type": "condition",
+          "config": {
+            "check_leave_balance": true
+          },
+          "next_nodes": [
+            {"node_id": "manager_approval", "condition": "balance_available"},
+            {"node_id": "notify_insufficient", "condition": "balance_insufficient"}
+          ]
+        },
+        {
+          "node_id": "manager_approval",
+          "node_type": "approval",
+          "config": {
+            "approver_role": "reporting_manager",
+            "timeout_days": 1
+          },
+          "next_nodes": [
+            {"node_id": "update_calendar", "condition": "approved"},
+            {"node_id": "end", "condition": "rejected"}
+          ]
+        },
+        {
+          "node_id": "update_calendar",
+          "node_type": "assign",
+          "config": {
+            "assignee_role": "hr",
+            "task": "Update leave records and team calendar"
+          },
+          "next_nodes": [
+            {"node_id": "notify_approval", "condition": null}
+          ]
+        },
+        {
+          "node_id": "notify_approval",
+          "node_type": "notify",
+          "config": {
+            "recipients": ["employee", "team"],
+            "message": "Leave approved"
+          },
+          "next_nodes": [
+            {"node_id": "end", "condition": null}
+          ]
+        },
+        {
+          "node_id": "notify_insufficient",
+          "node_type": "notify",
+          "config": {
+            "recipients": ["employee"],
+            "message": "Insufficient leave balance"
+          },
+          "next_nodes": [
+            {"node_id": "end", "condition": null}
+          ]
+        },
+        {
+          "node_id": "end",
+          "node_type": "end",
+          "config": {},
+          "next_nodes": []
+        }
+      ]
+    }
+  }
+}
